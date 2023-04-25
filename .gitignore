@@ -1,6 +1,5 @@
 .snakemake/
 chr19_STAR/
-data/
 logs/
 results/
 snake/
