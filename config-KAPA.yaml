@@ -1,0 +1,10 @@
+dataset: "KAPA"
+reads:
+  - R1
+  - R2
+samples:
+  - KAPA_mRNA_HyperPrep_-HBR-KAPA-100_ng_total_RNA-2_S5
+  - KAPA_mRNA_HyperPrep_-HBR-KAPA-100_ng_total_RNA-3_S6
+  - KAPA_mRNA_HyperPrep_-UHRR-KAPA-100_ng_total_RNA-2_S7
+  - KAPA_mRNA_HyperPrep_-UHRR-KAPA-100_ng_total_RNA-3_S8
+strand: 2

@@ -1,0 +1,10 @@
+dataset: "Collibri"
+reads:
+  - R1
+  - R2
+samples:
+  - Collibri_standard_protocol-HBR-Collibri-100_ng-2_S1
+  - Collibri_standard_protocol-HBR-Collibri-100_ng-3_S2
+  - Collibri_standard_protocol-UHRR-Collibri-100_ng-2_S3
+  - Collibri_standard_protocol-UHRR-Collibri-100_ng-3_S4
+strand: 1

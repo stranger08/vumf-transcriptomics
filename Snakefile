@@ -1,83 +1,123 @@
-SAMPLES, = glob_wildcards("data/samples/{sample}_R1_001.fastq.gz")
-
 adaptors = "data/adapters.fa"
 
 rule all:
     input:
+        expand("results/fastqc/{dataset}/{sample}_L001_{read}_001_fastqc.html", sample=config['samples'], dataset=config['dataset'], read=config['reads']),
         "results/multiqc_report.html",
+        expand("results/trimmed/{dataset}/{sample}_L001_{read}_001.fastq.gz", sample=config['samples'], dataset=config['dataset'], read=config['reads']),
+        expand("results/fastqc_trimmed/{dataset}/{sample}_L001_{read}_001_fastqc.html", sample=config['samples'], dataset=config['dataset'], read=config['reads']),
         "results/multiqc_report_trimmed.html",
         directory('chr19_STAR'),
-        expand("snake/{sample}/Aligned.sortedByCoord.out.bam", sample=SAMPLES),
-        expand("snake/{sample}/counts.txt", sample=SAMPLES),
-        r1_trimmed = expand("trimmed/{sample}_trimmed_L001_R1_001.fastq.gz", sample=SAMPLES),
-        r2_trimmed = expand("trimmed/{sample}_trimmed_L001_R2_001.fastq.gz", sample=SAMPLES),
-        r1_trimmed_fastqc_html = expand("results/fastqc/trimmed/{sample}_trimmed_L001_R1_001_fastqc.html", sample=SAMPLES),
-        r2_trimmed_fastqc_html = expand("results/fastqc/trimmed/{sample}_trimmed_L001_R2_001_fastqc.html", sample=SAMPLES),
-        r1_trimmed_fastqc_zip = expand("results/fastqc/trimmed/{sample}_trimmed_L001_R1_001_fastqc.zip", sample=SAMPLES),
-        r2_trimmed_fastqc_zip = expand("results/fastqc/trimmed/{sample}_trimmed_L001_R2_001_fastqc.zip", sample=SAMPLES)
+        expand("results/counts/{sample}/Aligned.sortedByCoord.out.bam", sample=config['samples']),
+        expand("results/counts/{sample}/counts.txt", sample=config['samples']),
 
+####
+# 1. FastQC
+####
 rule fastqc:
     input:
-        R1 = "data/samples/{sample}_R1_001.fastq.gz",
-        R2 = "data/samples/{sample}_R2_001.fastq.gz"
+        R1 = expand("data/{dataset}/{sample}_L001_R1_001.fastq.gz", sample=config['samples'], dataset=config['dataset']),
+        R2 = expand("data/{dataset}/{sample}_L001_R2_001.fastq.gz", sample=config['samples'], dataset=config['dataset'])
     output:
-        html = ["results/fastqc/{sample}_R1_001_fastqc.html", "results/fastqc/{sample}_R2_001_fastqc.html"],
-        zip = ["results/fastqc/{sample}_R1_001_fastqc.zip", "results/fastqc/{sample}_R2_001_fastqc.zip"]
+        html = ["results/fastqc/{dataset}/{sample}_L001_R1_001_fastqc.html", "results/fastqc/{dataset}/{sample}_L001_R2_001_fastqc.html"],
+        zip = ["results/fastqc/{dataset}/{sample}_L001_R1_001_fastqc.zip", "results/fastqc/{dataset}/{sample}_L001_R2_001_fastqc.zip"]
     params: "--quiet"
-    log:
-        "logs/fastqc/{sample}.log"
     threads: 2
     shell:
-        "fastqc {input.R1} {input.R2} -o results/fastqc -t {threads} &> {log}"
+        "fastqc {input.R1} {input.R2} -o results/fastqc/{config[dataset]} -t {threads}"
 
-rule fastqc_trimmed:
-    input:
-        R1 = "trimmed/{sample}_trimmed_L001_R1_001.fastq.gz",
-        R2 = "trimmed/{sample}_trimmed_L001_R2_001.fastq.gz"
-    output:
-        html = ["results/fastqc/trimmed/{sample}_trimmed_L001_R1_001_fastqc.html", "results/fastqc/trimmed/{sample}_trimmed_L001_R2_001_fastqc.html"],
-        zip = ["results/fastqc/trimmed/{sample}_trimmed_L001_R1_001_fastqc.zip", "results/fastqc/trimmed/{sample}_trimmed_L001_R2_001_fastqc.zip"]
-    params: "--quiet"
-    log:
-        "logs/fastqc/trimmed/{sample}.log"
-    threads: 2
-    shell:
-        "fastqc {input.R1} {input.R2} -o results/fastqc/trimmed -t {threads} &> {log}"
-
+###
+# 2. MultiQC
+###
 rule multiqc:
     input:
-        expand(["results/fastqc/{sample}_R1_001_fastqc.zip", "results/fastqc/{sample}_R2_001_fastqc.zip"], sample = SAMPLES)
+        expand(
+            [
+                "results/fastqc/{dataset}/{sample}_L001_R1_001_fastqc.zip", 
+                "results/fastqc/{dataset}/{sample}_L001_R2_001_fastqc.zip"
+            ], 
+            sample=config['samples'],
+            dataset=config['dataset'])
     output:
         "results/multiqc_report.html"
-    log:
-        "logs/multiqc/multiqc.log"
     envmodules:
         "MultiQC/1.9-gimkl-2020a-Python-3.8.2"
     shell:
-        "multiqc {input} -o results/ &> {log}"
+        "multiqc {input} -o results/"
 
-rule multiqc_trimmed:
-    input:
-        expand(["results/fastqc/trimmed/{sample}_trimmed_L001_R1_001_fastqc.zip", "results/fastqc/trimmed/{sample}_trimmed_L001_R2_001_fastqc.zip"], sample = SAMPLES)
-    output:
-        "results/multiqc_report_trimmed.html"
-    log:
-        "logs/multiqc/trimmed/multiqc.log"
-    envmodules:
-        "MultiQC/1.9-gimkl-2020a-Python-3.8.2"
-    shell:
-        "multiqc {input} -o results/ -n multiqc_report_trimmed.html &> {log}"
-
+####
+# 3. bbduk
+####
 rule bbduk:
     input:
-        r1 = 'data/samples/{sample}_R1_001.fastq.gz',
-        r2 = 'data/samples/{sample}_R2_001.fastq.gz'
+        r1 = ["data/{dataset}/{sample}_L001_R1_001.fastq.gz".format(sample=sample, dataset=config['dataset']) for sample in config['samples']],
+        r2 = ["data/{dataset}/{sample}_L001_R2_001.fastq.gz".format(sample=sample, dataset=config['dataset']) for sample in config['samples']]
+    params:
+        r1=lambda wildcards, input: ','.join(input.r1),
+        r2=lambda wildcards, input: ','.join(input.r2),
+        out1=lambda wildcards, output: ','.join(output.out1),
+        out2=lambda wildcards, output: ','.join(output.out2)
     output:
-        out1 = "trimmed/{sample}_trimmed_L001_R1_001.fastq.gz",
-        out2 = "trimmed/{sample}_trimmed_L001_R2_001.fastq.gz",
-    log: "logs/bbduk.{sample}.log"
+        out1 = expand("results/trimmed/{dataset}/{sample}_L001_R1_001.fastq.gz", sample=config['samples'], dataset=config['dataset']),
+        out2 = expand("results/trimmed/{dataset}/{sample}_L001_R2_001.fastq.gz", sample=config['samples'], dataset=config['dataset'])
     conda: "environment.yaml"
-    shell: "bbduk.sh in1={input.r1} out1={output.out1} in2={input.r2} out2={output.out2} ref={adaptors} qtrim=r trimq=10 ktrim=r k=23 mink=11 hdist=1 tpe tbo &>{log}; touch {output.out1} {output.out2}"
+    shell:
+        """
+            for sample in {config[samples]}
+            do
+                bbduk.sh \
+                in1=data/{config[dataset]}/${{sample}}_L001_R1_001.fastq.gz \
+                out1=results/trimmed/{config[dataset]}/${{sample}}_L001_R1_001.fastq.gz \
+                in2=data/{config[dataset]}/${{sample}}_L001_R2_001.fastq.gz \
+                out2=results/trimmed/{config[dataset]}/${{sample}}_L001_R2_001.fastq.gz \
+                ref={adaptors} \
+                qtrim=r \
+                trimq=10 \
+                ktrim=r \
+                k=23 \
+                mink=11 \
+                hdist=1 \
+                tpe \
+                tbo
+            done
+        """
+
+####
+# 4. FastQC on trimmed data
+####
+rule fastqc_trimmed:
+    input:
+        R1 = expand("results/trimmed/{dataset}/{sample}_L001_R1_001.fastq.gz", sample=config['samples'], dataset=config['dataset']),
+        R2 = expand("results/trimmed/{dataset}/{sample}_L001_R2_001.fastq.gz", sample=config['samples'], dataset=config['dataset'])
+    output:
+        html = ["results/fastqc_trimmed/{dataset}/{sample}_L001_R1_001_fastqc.html", "results/fastqc_trimmed/{dataset}/{sample}_L001_R2_001_fastqc.html"],
+        zip = ["results/fastqc_trimmed/{dataset}/{sample}_L001_R1_001_fastqc.zip", "results/fastqc_trimmed/{dataset}/{sample}_L001_R2_001_fastqc.zip"]
+    params: "--quiet"
+    threads: 2
+    shell:
+        """
+            mkdir -p results/fastqc_trimmed/{config[dataset]} &&
+            fastqc {input.R1} {input.R2} -o results/fastqc_trimmed/{config[dataset]} -t {threads}
+        """
+
+###
+# 5. MultiQC on trimmed data
+###
+rule multiqc_trimmed:
+    input:
+        expand(
+            [
+                "results/fastqc_trimmed/{dataset}/{sample}_L001_R1_001_fastqc.zip", 
+                "results/fastqc_trimmed/{dataset}/{sample}_L001_R2_001_fastqc.zip"
+            ], 
+            sample=config['samples'],
+            dataset=config['dataset'])
+    output:
+        "results/multiqc_report_trimmed.html"
+    envmodules:
+        "MultiQC/1.9-gimkl-2020a-Python-3.8.2"
+    shell:
+        "multiqc {input} -o results/ -n multiqc_report_trimmed.html"
 
 ####
 # 6. Star
@@ -100,37 +140,38 @@ rule index:
 
 rule snakemapping:
     input:
-        R1L1 = "data/samples/{sample}_R1_001.fastq.gz",
-        R2L1 = "data/samples/{sample}_R2_001.fastq.gz",
+        R1 = expand("data/{dataset}/{sample}_L001_R1_001.fastq.gz", sample=config['samples'], dataset=config['dataset']),
+        R2 = expand("data/{dataset}/{sample}_L001_R2_001.fastq.gz", sample=config['samples'], dataset=config['dataset']),
         refdir = "chr19_STAR"
     params:
-        outdir = "snake/{sample}",
+        outdir = "results/counts/{sample}",
+        readFilesInR1 = lambda wildcards, input: ",".join(["../../../" + i for i in input.R1]),
+        readFilesInR2 = lambda wildcards, input: ",".join(["../../../" + i for i in input.R2])
     output:
-        "snake/{sample}/SJ.out.tab",
-        "snake/{sample}/Aligned.sortedByCoord.out.bam"
+        "results/counts/{sample}/SJ.out.tab",
+        "results/counts/{sample}/Aligned.sortedByCoord.out.bam",
     threads: 8
     shell:
-        'rm -rf {params.outdir} && '
-        'mkdir {params.outdir} && '
+        'mkdir -p {params.outdir} && '
         'cd {params.outdir} && '
         'STAR --runThreadN {threads} '
-        '--genomeDir ../../{input.refdir} '
-        '--readFilesIn ../../{input.R1L1} ../../{input.R2L1} '
+        '--genomeDir ../../../{input.refdir} '
+        '--readFilesIn {params.readFilesInR1} {params.readFilesInR2} '
         '--readFilesCommand gunzip -c '
-        '--outSAMtype BAM SortedByCoordinate && cd ..'
+        '--outSAMtype BAM SortedByCoordinate && cd ../..'
 
 ####
 # 7. featureCounts
 ####
 rule featurecounts:
     input:
-        samples = "snake/{sample}",
         gtf = "data/chr19_20Mb.gtf",
     output:
-        counts = "snake/{sample}/counts.txt",
+        counts = "results/counts/{sample}/counts.txt",
     shell:
-        'featureCounts -p -t exon -g gene_id -a {input.gtf} '
-        '-o {input.samples}/counts.txt '
-        '{input.samples}/Aligned.sortedByCoord.out.bam '
-        '-s 1'# {1(Collibri) or 2(Kappa)}
-        ## TODO think of how can 1/2 can be parameterized
+        """
+            for sample in {config[samples]}
+            do
+              featureCounts -p -t exon -g gene_id -s {config[strand]} -a {input.gtf} -o results/counts/${{sample}}/counts.txt results/counts/${{sample}}/Aligned.sortedByCoord.out.bam
+            done
+        """
